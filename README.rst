@@ -1,4 +1,4 @@
-py-idstools for Snort3 |build-status| |docs|
+py-idstools |build-status| |docs|
 =================================
 
 py-idstools is a collection of Python libraries for working with IDS
