@@ -56,29 +56,25 @@ LOG = logging.getLogger(__name__)
 HDR_LEN = 8
 
 # Length of an appid name.
-APPID_NAME_LEN = 16
+APPID_NAME_LEN = 64
 
 # Record types.
-PACKET          = 2
-EVENT           = 7
-EVENT_IP6       = 72
-EVENT_V2        = 104
-EVENT_IP6_V2    = 105
-EXTRA_DATA      = 110
-EVENT_APPID     = 111
-EVENT_APPID_IP6 = 112
-APPSTAT         = 113
+# CURRENT
+UNIFIED2_PACKET              =  2
+UNIFIED2_BUFFER              =  3  # // !legacy_events
+UNIFIED2_IDS_EVENT_VLAN      = 104 # // legacy_events
+UNIFIED2_IDS_EVENT_IPV6_VLAN = 105 # // legacy_events
+UNIFIED2_EXTRA_DATA          = 110
+UNIFIED2_EVENT3              = 114
+
 
 RECORD_TYPES = [
-    PACKET,
-    EVENT,
-    EVENT_IP6,
-    EVENT_V2,
-    EVENT_IP6_V2,
-    EXTRA_DATA,
-    EVENT_APPID,
-    EVENT_APPID_IP6,
-    APPSTAT,
+    UNIFIED2_PACKET,
+    UNIFIED2_BUFFER,
+    UNIFIED2_IDS_EVENT_VLAN,
+    UNIFIED2_IDS_EVENT_IPV6_VLAN,
+    UNIFIED2_EXTRA_DATA,
+    UNIFIED2_EVENT3,
 ]
 
 EXTRA_DATA_TYPE = {
@@ -151,32 +147,79 @@ PACKET_FIELDS = (
     Field("packet-microsecond", 4),
     Field("linktype", 4),
     Field("length", 4),
-    Field("data", None),
+    Field("data", 1),
 )
 
-# Fields in a EVENT record.
+# Fields in a PACKET record.
+BUFFER_FIELDS = (
+    Field("sensor-id", 4),
+    Field("event-id", 4),
+    Field("event-second", 4),
+    Field("packet-second", 4),
+    Field("packet-microsecond", 4),
+    Field("length", 4),
+    Field("data", 1),
+)
+
+# UNIFIED2_EVENT3 = type 114
 EVENT_FIELDS = (
-    Field("sensor-id", 4),
+    Field("snort-id", 4),
     Field("event-id", 4),
     Field("event-second", 4),
     Field("event-microsecond", 4),
-    Field("signature-id", 4),
-    Field("generator-id", 4),
-    Field("signature-revision", 4),
-    Field("classification-id", 4),
-    Field("priority", 4),
-    Field("source-ip.raw", 4, "4s"),
-    Field("destination-ip.raw", 4, "4s"),
-    Field("sport-itype", 2),
-    Field("dport-icode", 2),
-    Field("protocol", 1),
-    Field("impact-flag", 1),
-    Field("impact", 1),
+    Field("rule-gid", 4),
+    Field("rule-sid", 4),
+    Field("rule-rev", 4),
+    Field("rule-class", 4),
+    Field("rule-priority", 4),
+
+    ## everything above this point is common to all prior event records
+    ## try to keep the same for things like barnyard2
+    Field("pkt-src-ip", 4, "4s"),
+    Field("pkt-dst-ip", 4, "4s"),
+    Field("pkt-src-port-itype", 2),
+    Field("pkt-dst-port-icode", 2),
+    Field("pkt-mpls-label", 4),
+    Field("pkt-vlan-id", 2),
+    Field("pkt-ip-ver", 1),
+    Field("pkt-ip-proto", 2),
+    Field("policy-id-context", 4),
+    Field("policy-id-inspect", 4),
+    Field("policy-id_detect", 4),
+    Field("unused", 2),
+    Field("snort-status", 2),
+    Field("snort-action", 2),
     Field("blocked", 1),
+    Field("app-name", 1),
 )
 
-# Fields for an IPv6 event.
-EVENT_IP6_FIELDS = (
+# UNIFIED2_IDS_EVENT_VLAN = type 104
+EVENT_FIELDS_V2 = (
+    Field("snort-id", 4),
+    Field("event-id", 4),
+    Field("event-second", 4),
+    Field("event-microsecond", 4),
+    Field("signature-id", 4),
+    Field("generator-id", 4),
+    Field("signature-revision", 4),
+    Field("classification-id", 4),
+    Field("priority-id", 4),
+    Field("ip-source", 4),
+    Field("ip-destination", 4),
+    Field("sport-itype", 2),
+    Field("dport-icode", 2),
+    Field("ip-proto", 1),
+    Field("impact-flag", 1),
+    Field("impact", 1),
+    Field("blocked", 1),
+    Field("mpls-label", 4),
+    Field("vlanId", 2),
+    Field("pad2", 2),
+)
+
+
+# UNIFIED2_IDS_EVENT_IPV6_VLAN = type 105
+EVENT_IP6_FIELDS_V2 = (
     Field("sensor-id", 4),
     Field("event-id", 4),
     Field("event-second", 4),
@@ -186,14 +229,17 @@ EVENT_IP6_FIELDS = (
     Field("signature-revision", 4),
     Field("classification-id", 4),
     Field("priority", 4),
-    Field("source-ip.raw", 16, "16s"),
-    Field("destination-ip.raw", 16, "16s"),
+    Field("ip-source", 16, "16s"),
+    Field("ip-destination", 16, "16s"),
     Field("sport-itype", 2),
     Field("dport-icode", 2),
-    Field("protocol", 1),
+    Field("ip-proto", 1),
     Field("impact-flag", 1),
     Field("impact", 1),
     Field("blocked", 1),
+    Field("mpls-label", 4),
+    Field("vlanId", 2),
+    Field("pad2", 2),
 )
 
 # Fields in a v2 event.
@@ -203,14 +249,7 @@ EVENT_V2_FIELDS = EVENT_FIELDS + (
     Field("pad2", 2),
 )
 
-# Fields for an IPv6 v2 event.
-EVENT_V2_IP6_FIELDS = EVENT_IP6_FIELDS + (
-    Field("mpls-label", 4),
-    Field("vlan-id", 2),
-    Field("pad2", 2),
-)
-
-# Fields in a UNIFIED_EXTRA_DATA record.
+# UNIFIED2_EXTRA_DATA - type 110
 EXTRA_DATA_FIELDS = (
     Field("event-type", 4),
     Field("event-length", 4),
@@ -222,6 +261,7 @@ EXTRA_DATA_FIELDS = (
     Field("data-length", 4),
     Field("data", None),
 )
+
 
 class Event(dict):
     """Event represents a unified2 event record with a dict-like
@@ -250,10 +290,17 @@ class Event(dict):
     * mpls-label
     * vlan-id
 
-    **Deprecated**: Methods that return events rather than single
-    records will also populate the fields *packets* and *extra-data*.
-    These fields are lists of the :class:`.Packet` and
-    :class:`.ExtraData` records associated with the event.
+    * rule-gid
+    * rule-sid
+    * rule-rev
+    * rule-class
+    * rule-priority
+    * policy-id-context
+    * policy-id-inspect
+    * policy-id-detect
+    * snort-status
+    * snort-action
+
 
     """
 
@@ -262,23 +309,26 @@ class Event(dict):
         "event-id": None,
         "event-second": None,
         "event-microsecond": None,
-        "signature-id": None,
-        "generator-id": None,
-        "signature-revision": None,
-        "classification-id": None,
-        "priority": None,
-        "source-ip.raw": b"",
-        "destination-ip.raw": b"",
-        "sport-itype": None,
-        "dport-icode": None,
-        "protocol": None,
-        "impact-flag": None,
-        "impact": None,
-        "blocked": None,
-        "mpls-label": None,
-        "vlan-id": None,
-        "pad2": None,
-        "appid": None,
+        "rule-gid": None,
+        "rule-sid": None,
+        "rule-rev": None,
+        "rule-class": None,
+        "rule-priority": None,
+        "policy-id-context": None,
+        "policy-id-inspect": None,
+        "policy-id-detect": None,
+        "pkt-src-ip": b"",
+        "pkt-dst-ip": b"",
+        "pkt-mpls-label": None,
+        "pkt-src-port-itype": None,
+        "pkt-dst-port-icode": None,
+        "pkt-vlan-id": None,
+        "unused": None,
+        "pkt-ip-ver": None,
+        "pkt-ip-proto": None,
+        "snort-status": None,
+        "snort-action": None,
+        "app-name": None,
     }
 
     def __init__(self, event):
@@ -309,6 +359,26 @@ class Packet(dict):
 
     def __init__(self, *fields, **kwargs):
         for field, value in zip(PACKET_FIELDS, fields):
+            self[field.name] = value
+        self.update(kwargs)
+
+class Buffer(dict):
+    """Packet represents a unified2 packet record with a dict-like interface.
+
+    Fields:
+
+    * sensor-id
+    * event-id
+    * event-second
+    * packet-second
+    * packet-microsecond
+    * length
+    * data
+
+    """
+
+    def __init__(self, *fields, **kwargs):
+        for field, value in zip(BUFFER_FIELDS, fields):
             self[field.name] = value
         self.update(kwargs)
 
@@ -371,11 +441,12 @@ class EventDecoder(AbstractDecoder):
 
     def decode(self, buf):
         """Decodes a buffer into an :class:`.Event` object."""
+        #LOG.warn("### RETURN BUF LENGTH: ", len(buf))
         values = struct.unpack(self.format, buf[0:self.fixed_len])
         keys = [field.name for field in self.fields]
         event = dict(zip(keys, values))
-        event["source-ip"] = self.decode_ip(event["source-ip.raw"])
-        event["destination-ip"] = self.decode_ip(event["destination-ip.raw"])
+        event["pkt-src-ip"] = self.decode_ip(event["pkt-src-ip"])
+        event["pkt-dst-ip"] = self.decode_ip(event["pkt-dst-ip"])
 
         # Check for remaining data, the appid.
         remainder = buf[self.fixed_len:]
@@ -399,6 +470,15 @@ class PacketDecoder(AbstractDecoder):
         parts = struct.unpack(self.format, buf[0:self.fixed_len])
         return Packet(*parts, data=buf[self.fixed_len:])
 
+class BufferDecoder(AbstractDecoder):
+    """ Decoder for packet type records. """
+
+    def decode(self, buf):
+        """Decodes a buffer into a :class:`.Packet` object."""
+        #LOG.warn("#### RETURN FORMAT:  ", self.format)
+        parts = struct.unpack(self.format, buf[0:self.fixed_len])
+        return Buffer(*parts, data=buf[self.fixed_len:])
+
 class ExtraDataDecoder(AbstractDecoder):
     """ Decoder for extra data type records. """
 
@@ -409,14 +489,12 @@ class ExtraDataDecoder(AbstractDecoder):
 
 # Map of decoders keyed by record type.
 DECODERS = {
-    EVENT:           EventDecoder(EVENT_FIELDS),
-    EVENT_IP6:       EventDecoder(EVENT_IP6_FIELDS),
-    EVENT_V2:        EventDecoder(EVENT_V2_FIELDS),
-    EVENT_IP6_V2:    EventDecoder(EVENT_V2_IP6_FIELDS),
-    EVENT_APPID:     EventDecoder(EVENT_V2_FIELDS),
-    EVENT_APPID_IP6: EventDecoder(EVENT_V2_IP6_FIELDS),
-    PACKET:          PacketDecoder(PACKET_FIELDS),
-    EXTRA_DATA:      ExtraDataDecoder(EXTRA_DATA_FIELDS),
+    UNIFIED2_EVENT3:                EventDecoder(EVENT_FIELDS),
+    UNIFIED2_IDS_EVENT_VLAN:        EventDecoder(EVENT_V2_FIELDS),
+    UNIFIED2_IDS_EVENT_IPV6_VLAN:   EventDecoder(EVENT_IP6_FIELDS_V2),
+    UNIFIED2_PACKET:                PacketDecoder(PACKET_FIELDS),
+    UNIFIED2_BUFFER:                BufferDecoder(BUFFER_FIELDS),
+    UNIFIED2_EXTRA_DATA:            ExtraDataDecoder(EXTRA_DATA_FIELDS),
 }
 
 class Aggregator(object):
