@@ -9,8 +9,7 @@ Changes/new features from the original
 --------------------------------------
 - The file unified2.py was modified to include new record types. The new types were based on the official `unified2.h file from snort3 <https://github.com/snort3/snort3/blob/master/src/log/unified2.h>`_. 
 
-- The program u2_to_kafka.py is the first version of a program to send records from Snort3 Unified2 files to kafka producer. This program converts u2 records to json for making Kafka 
-produces them. 
+- The program u2_to_kafka.py is the first version of a program to send records from Snort3 Unified2 files to kafka producer. This program converts u2 records to json for making Kafka produces them. 
 
 Included Programs
 -----------------
