@@ -157,6 +157,7 @@ BUFFER_FIELDS = (
     Field("event-second", 4),
     Field("packet-second", 4),
     Field("packet-microsecond", 4),
+    Field("linktype", 4),
     Field("length", 4),
     Field("data", 1),
 )
@@ -167,30 +168,29 @@ EVENT_FIELDS = (
     Field("event-id", 4),
     Field("event-second", 4),
     Field("event-microsecond", 4),
-    Field("rule-gid", 4),
-    Field("rule-sid", 4),
-    Field("rule-rev", 4),
-    Field("rule-class", 4),
-    Field("rule-priority", 4),
-
+    Field("generator-id", 4),
+    Field("signature-id", 4),
+    Field("signature-revision", 4),
+    Field("classification-id", 4),
+    Field("priority", 4),
+    Field("pid-context", 4),
+    Field("pid-inspect", 4),
+    Field("pid-detect", 4),
+    Field("source-ip.raw", 16, "16s"),
+    Field("destination-ip.raw", 16, "16s"),
+    Field("mpls-label", 4),
     ## everything above this point is common to all prior event records
     ## try to keep the same for things like barnyard2
-    Field("pkt-src-ip", 4, "4s"),
-    Field("pkt-dst-ip", 4, "4s"),
-    Field("pkt-src-port-itype", 2),
-    Field("pkt-dst-port-icode", 2),
-    Field("pkt-mpls-label", 4),
-    Field("pkt-vlan-id", 2),
-    Field("pkt-ip-ver", 1),
-    Field("pkt-ip-proto", 2),
-    Field("policy-id-context", 4),
-    Field("policy-id-inspect", 4),
-    Field("policy-id_detect", 4),
+    Field("sport-itype", 2),
+    Field("dport-icode", 2),
+    Field("vlan-id", 2),
     Field("unused", 2),
-    Field("snort-status", 2),
-    Field("snort-action", 2),
-    Field("blocked", 1),
-    Field("app-name", 1),
+    Field("ip-version", 1),
+    Field("ip-protocol", 1),
+    Field("status", 1),
+    Field("action", 1),
+    Field("appid", None),
+    #Field("blocked", 1),
 )
 
 # UNIFIED2_IDS_EVENT_VLAN = type 104
@@ -203,12 +203,12 @@ EVENT_FIELDS_V2 = (
     Field("generator-id", 4),
     Field("signature-revision", 4),
     Field("classification-id", 4),
-    Field("priority-id", 4),
-    Field("ip-source", 4),
-    Field("ip-destination", 4),
+    Field("priority", 4),
+    Field("source-ip.raw", 4, "4s"),
+    Field("destination-ip.raw", 4, "4s"),
     Field("sport-itype", 2),
     Field("dport-icode", 2),
-    Field("ip-proto", 1),
+    Field("protocol", 1),
     Field("impact-flag", 1),
     Field("impact", 1),
     Field("blocked", 1),
@@ -229,8 +229,8 @@ EVENT_IP6_FIELDS_V2 = (
     Field("signature-revision", 4),
     Field("classification-id", 4),
     Field("priority", 4),
-    Field("ip-source", 16, "16s"),
-    Field("ip-destination", 16, "16s"),
+    Field("source-ip.raw", 16, "16s"),
+    Field("destination-ip.raw", 16, "16s"),
     Field("sport-itype", 2),
     Field("dport-icode", 2),
     Field("ip-proto", 1),
@@ -258,8 +258,8 @@ EXTRA_DATA_FIELDS = (
     Field("event-second", 4),
     Field("type", 4),
     Field("data-type", 4),
-    Field("data-length", 4),
-    Field("data", None),
+    Field("blob-length", 4),
+    Field("httpdata", None),
 )
 
 
@@ -309,26 +309,23 @@ class Event(dict):
         "event-id": None,
         "event-second": None,
         "event-microsecond": None,
-        "rule-gid": None,
-        "rule-sid": None,
-        "rule-rev": None,
-        "rule-class": None,
-        "rule-priority": None,
-        "policy-id-context": None,
-        "policy-id-inspect": None,
-        "policy-id-detect": None,
-        "pkt-src-ip": b"",
-        "pkt-dst-ip": b"",
-        "pkt-mpls-label": None,
-        "pkt-src-port-itype": None,
-        "pkt-dst-port-icode": None,
-        "pkt-vlan-id": None,
-        "unused": None,
-        "pkt-ip-ver": None,
-        "pkt-ip-proto": None,
-        "snort-status": None,
-        "snort-action": None,
-        "app-name": None,
+        "generator-id": None,
+        "signature-id": None,
+        "signature-revision": None,
+        "classification-id": None,
+        "priority": None,
+        "source-ip": b"",
+        "destination-ip": b"",
+        "sport-itype": None,
+        "dport-icode": None,
+        "protocol": None,
+        "impact-flag": None,
+        "impact": None,
+        "blocked": None,
+        "mpls-label": None,
+        "vlan-id": None,
+        "pad2": None,
+        "appid": None,
     }
 
     def __init__(self, event):
@@ -396,7 +393,7 @@ class ExtraData(dict):
     * type
     * data-type
     * data-length
-    * data
+    * HTTP-data
 
     """
 
@@ -445,19 +442,30 @@ class EventDecoder(AbstractDecoder):
         values = struct.unpack(self.format, buf[0:self.fixed_len])
         keys = [field.name for field in self.fields]
         event = dict(zip(keys, values))
-        event["pkt-src-ip"] = self.decode_ip(event["pkt-src-ip"])
-        event["pkt-dst-ip"] = self.decode_ip(event["pkt-dst-ip"])
+        if self.fields == EVENT_FIELDS:
+            event["source-ip"] = self.decode_ip3(event["source-ip.raw"], event["ip-version"] >> 4)
+            event["destination-ip"] = self.decode_ip3(event["destination-ip.raw"], event["ip-version"] >> 4)
 
+        else:
+            event["source-ip"] = self.decode_ip(event["source-ip.raw"])
+            event["destination-ip"] = self.decode_ip(event["destination-ip.raw"])
         # Check for remaining data, the appid.
         remainder = buf[self.fixed_len:]
         if remainder:
-            event["appid"] = str(remainder).split("\x00")[0]
+            event["appid"] = str(remainder).replace("b'", "").split("\\x00")[0]
 
         return Event(event)
 
     def decode_ip(self, addr):
         if len(addr) == 4:
             return socket.inet_ntoa(addr)
+        else:
+            parts = struct.unpack(">" + "H" * int((len(addr) / 2)), addr)
+            return ":".join("%04x" % p for p in parts)
+
+    def decode_ip3(self, addr, vers):
+        if vers == 4:
+            return socket.inet_ntop(socket.AF_INET, addr[12:])
         else:
             parts = struct.unpack(">" + "H" * int((len(addr) / 2)), addr)
             return ":".join("%04x" % p for p in parts)
@@ -485,7 +493,9 @@ class ExtraDataDecoder(AbstractDecoder):
     def decode(self, buf):
         """Decodes a buffer into an :class:`.ExtraData` object."""
         parts = struct.unpack(self.format, buf[0:self.fixed_len])
-        return ExtraData(*parts, data=buf[self.fixed_len:])
+        remainder = buf[self.fixed_len:]
+        httpdata = str(remainder).replace("b'", "")
+        return ExtraData(*parts, httpdata=httpdata)
 
 # Map of decoders keyed by record type.
 DECODERS = {
